@@ -1,0 +1,23 @@
+{
+  "name": "review-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PoC: can OpenAI's native web search reliably find and aggregate product reviews from 3-5 selected sources at a reasonable API cost?",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "openai": "^7.13.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
