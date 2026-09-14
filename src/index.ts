@@ -1,56 +1,40 @@
 /**
- * Entrypoint.
+ * CLI entrypoint.
  *
- *   npm start        # research ACTIVE_PRODUCT from src/products.ts
+ *   npm start        # research every product in ACTIVE_PRODUCTS (src/products.ts)
  *
- * Prints a human-readable summary (incl. token usage + estimated API cost) and
- * writes the full validated JSON report to ./output.
+ * Loops over the product list via `runBatch` (shared with the web UI in
+ * server.ts), printing a per-product summary and a batch cost total, and
+ * writing one JSON report per product to ./output.
  */
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { config } from "./config.js";
 import { log } from "./logger.js";
-import { ACTIVE_PRODUCT } from "./products.js";
+import { ACTIVE_PRODUCTS } from "./products.js";
 import type { FinalReport } from "./schema.js";
-import { runResearch } from "./orchestrator.js";
+import { runBatch, type BatchEntry } from "./batchRunner.js";
 
 async function main(): Promise<void> {
-  const product = ACTIVE_PRODUCT;
+  const products = ACTIVE_PRODUCTS;
 
   log.info("ReviewBridge — Product Review Intelligence Agent (PoC)");
   log.info("Provider: OpenAI");
   log.info(`Model: ${config.openaiModel}`);
   log.info(`Max sources: ${config.maxSources}`);
   log.info("Search strategy: OpenAI native web search");
-  log.info(`Product: ${product.name} | SKU: ${product.sku ?? "-"} | model#: ${product.model ?? "-"}`);
+  log.info(`Batch size: ${products.length} product(s)`);
   console.log();
 
-  let report: FinalReport;
-  try {
-    report = await runResearch(product);
-  } catch (err) {
-    log.error(`research failed: ${(err as Error).message}`);
-    process.exitCode = 1;
-    return;
+  const batch = await runBatch(products, () => console.log());
+  for (const b of batch) {
+    if (b.report) {
+      printSummary(b.report);
+      console.log();
+    }
   }
 
-  const path = await save(report);
-  printSummary(report);
-  console.log();
-  log.info(`full JSON report: ${path}`);
-}
+  printBatchSummary(batch);
 
-async function save(report: FinalReport): Promise<string> {
-  await mkdir(config.outputDir, { recursive: true });
-  const slug = report.product.requested_name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 60);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const path = join(config.outputDir, `${slug}-${stamp}.json`);
-  await writeFile(path, JSON.stringify(report, null, 2), "utf8");
-  return path;
+  if (batch.every((b) => b.report == null)) process.exitCode = 1;
 }
 
 function printSummary(r: FinalReport): void {
@@ -120,6 +104,54 @@ function printSummary(r: FinalReport): void {
     );
   }
   console.log(`  Note: ${u.notes}`);
+  console.log(line);
+}
+
+function printBatchSummary(batch: BatchEntry[]): void {
+  const line = "═".repeat(66);
+  const succeeded = batch.filter((b) => b.report != null);
+  const failed = batch.filter((b) => b.report == null);
+
+  console.log(line);
+  console.log("BATCH SUMMARY");
+  console.log(line);
+  for (const b of batch) {
+    const status = b.report ? b.report.research_status : "ERROR";
+    const cost = b.report?.usage.estimated_cost_usd;
+    console.log(
+      `  ${status.padEnd(22)} ${b.product.name}` +
+        (cost != null ? ` — $${cost.toFixed(4)}` : b.error ? ` — ${b.error}` : ""),
+    );
+  }
+
+  if (succeeded.length) {
+    const totals = succeeded.reduce(
+      (acc, b) => {
+        const u = b.report!.usage;
+        acc.apiRequests += u.api_requests;
+        acc.webSearches += u.web_search_calls;
+        acc.inputTokens += u.input_tokens;
+        acc.outputTokens += u.output_tokens;
+        acc.totalTokens += u.total_tokens;
+        if (u.estimated_cost_usd != null) acc.cost += u.estimated_cost_usd;
+        else acc.costUnknown = true;
+        return acc;
+      },
+      { apiRequests: 0, webSearches: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, cost: 0, costUnknown: false },
+    );
+
+    console.log(line);
+    console.log(`  Products succeeded:    ${succeeded.length}/${batch.length}`);
+    console.log(`  Total API requests:    ${totals.apiRequests}`);
+    console.log(`  Total web searches:    ${totals.webSearches}`);
+    console.log(`  Total tokens:          ${totals.totalTokens} (${totals.inputTokens} in / ${totals.outputTokens} out)`);
+    console.log(
+      `  Total estimated cost:  $${totals.cost.toFixed(4)}${totals.costUnknown ? " (+ unpriced model(s), see notes above)" : ""}`,
+    );
+  }
+  if (failed.length) {
+    console.log(`  Products failed:       ${failed.length}/${batch.length}`);
+  }
   console.log(line);
 }
 

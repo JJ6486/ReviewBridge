@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ReviewBridge</title>
+<style>
+  :root {
+    --ink: #14181f;
+    --ink-soft: #565f6e;
+    --ink-faint: #8993a3;
+    --line: #e2e6ec;
+    --line-strong: #cbd2dd;
+    --surface: #ffffff;
+    --ground: #f3f5f8;
+    --ground-2: #eaedf3;
+    --accent: #3949ce;
+    --accent-ink: #2c39a8;
+    --accent-wash: #eceeff;
+    --good: #16794f;
+    --good-wash: #e4f6ee;
+    --warn: #92620a;
+    --warn-wash: #fdf1dc;
+    --crit: #ae2d38;
+    --crit-wash: #fbe8e9;
+    --neutral: #565f6e;
+    --neutral-wash: #eceff3;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(20, 24, 31, 0.04), 0 8px 24px -12px rgba(20, 24, 31, 0.16);
+    --f-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --f-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 20px 64px; }
+
+  header.top {
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    margin-bottom: 32px;
+  }
+  header.top .inner {
+    max-width: 920px; margin: 0 auto; padding: 22px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), #6a3fd6);
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px;
+    flex-shrink: 0;
+  }
+  .brand h1 { font-size: 18px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .brand p { margin: 1px 0 0; font-size: 12.5px; color: var(--ink-faint); }
+  .status-pill {
+    font-size: 12px; color: var(--ink-faint); font-family: var(--f-mono);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+
+  h2.section-title { font-size: 17px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.01em; }
+  p.section-hint { margin: 0 0 18px; color: var(--ink-faint); font-size: 13.5px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 22px; box-shadow: var(--shadow);
+  }
+
+  /* ---- product input rows ---- */
+  #productRows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .product-row {
+    display: grid; grid-template-columns: 1fr 200px 36px; gap: 10px; align-items: center;
+  }
+  .product-row .idx {
+    grid-column: 1 / -1; font-size: 11.5px; color: var(--ink-faint); font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase; margin-top: 6px;
+  }
+  .product-row:first-child .idx { margin-top: 0; }
+  input[type="text"] {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 8px;
+    font-size: 14px; font-family: var(--f-body); color: var(--ink); background: var(--surface);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input[type="text"]:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash);
+  }
+  input[type="text"]::placeholder { color: var(--ink-faint); }
+  .row-remove {
+    width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--surface); color: var(--ink-faint); cursor: pointer; font-size: 16px;
+    display: grid; place-items: center; line-height: 1; transition: all 0.15s;
+  }
+  .row-remove:hover:not(:disabled) { border-color: var(--crit); color: var(--crit); background: var(--crit-wash); }
+  .row-remove:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .setup-actions {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px;
+    padding-top: 16px; border-top: 1px solid var(--line); flex-wrap: wrap;
+  }
+  .btn-add {
+    background: none; border: 1px dashed var(--line-strong); color: var(--accent-ink);
+    padding: 9px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-add:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-wash); }
+  .btn-add:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint-min { font-size: 12.5px; color: var(--ink-faint); }
+
+  .btn-primary {
+    background: var(--accent); color: #fff; border: none; padding: 13px 26px; border-radius: 9px;
+    font-size: 14.5px; font-weight: 700; cursor: pointer; transition: background 0.15s, transform 0.1s;
+    box-shadow: 0 1px 2px rgba(57, 73, 206, 0.15), 0 6px 16px -6px rgba(57, 73, 206, 0.5);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-ink); }
+  .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+  .btn-primary:disabled { background: var(--line-strong); color: var(--ink-faint); cursor: not-allowed; box-shadow: none; }
+  .cta-row { display: flex; justify-content: flex-end; margin-top: 20px; align-items: center; gap: 14px; }
+  #formError { color: var(--crit); font-size: 13px; font-weight: 600; }
+
+  /* ---- progress ---- */
+  #progress .card { padding: 26px; }
+  .progress-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; flex-wrap: wrap; gap: 6px; }
+  .progress-head .label { font-size: 15px; font-weight: 700; }
+  .progress-head .elapsed { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-faint); }
+  .bar-track { height: 8px; border-radius: 5px; background: var(--ground-2); overflow: hidden; margin-bottom: 10px; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #6a3fd6); border-radius: 5px; transition: width 0.4s ease; width: 4%; }
+  .progress-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 16px; }
+  .progress-sub b { color: var(--ink); }
+  .log-panel {
+    background: #10141c; color: #c7d0e0; font-family: var(--f-mono); font-size: 12px; line-height: 1.7;
+    border-radius: 8px; padding: 14px 16px; height: 220px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .log-panel .line { opacity: 0.92; }
+  .spinner {
+    width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--accent-wash);
+    border-top-color: var(--accent); display: inline-block; animation: spin 0.8s linear infinite; vertical-align: -3px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- results ---- */
+  #results .summary-bar {
+    display: flex; gap: 22px; flex-wrap: wrap; align-items: baseline; margin-bottom: 18px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px 20px; box-shadow: var(--shadow);
+  }
+  .summary-stat .n { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .summary-stat .k { font-size: 11.5px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+  .summary-bar .spacer { flex: 1; }
+  .btn-reset {
+    background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-soft);
+    padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .btn-reset:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--ground-2); padding: 4px; border-radius: 10px; width: fit-content; }
+  .tab-btn {
+    border: none; background: none; padding: 8px 18px; border-radius: 7px; font-size: 13.5px; font-weight: 600;
+    color: var(--ink-soft); cursor: pointer; transition: all 0.15s;
+  }
+  .tab-btn.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+  .product-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 24px; margin-bottom: 18px; box-shadow: var(--shadow);
+  }
+  .pc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+  .pc-head h3 { margin: 0 0 3px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  .pc-head .requested { font-size: 12.5px; color: var(--ink-faint); }
+  .pc-head .requested code { background: var(--ground-2); padding: 1px 6px; border-radius: 5px; font-size: 11.5px; }
+
+  .badge {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 6px;
+    letter-spacing: 0.02em; white-space: nowrap;
+  }
+  .badge.status-SUCCESS { background: var(--good-wash); color: var(--good); }
+  .badge.status-PARTIAL { background: var(--warn-wash); color: var(--warn); }
+  .badge.status-NO_RELIABLE_SOURCES { background: var(--neutral-wash); color: var(--neutral); }
+  .badge.status-PRODUCT_NOT_IDENTIFIED,
+  .badge.status-FAILED,
+  .badge.status-ERROR { background: var(--crit-wash); color: var(--crit); }
+
+  .badge.match-EXACT_MATCH { background: var(--good-wash); color: var(--good); }
+  .badge.match-LIKELY_MATCH { background: var(--accent-wash); color: var(--accent-ink); }
+  .badge.match-UNCERTAIN { background: var(--warn-wash); color: var(--warn); }
+  .badge.match-NO_MATCH { background: var(--neutral-wash); color: var(--neutral); }
+
+  .sentiment-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+  .sentiment-row .badge { font-size: 12px; padding: 5px 11px; }
+  .pc-summary { color: var(--ink-soft); font-size: 14px; margin: 0 0 16px; line-height: 1.6; }
+
+  .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .pros-cons h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px; color: var(--ink-faint); }
+  .pros-cons ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .pros-cons li { font-size: 13.5px; padding-left: 18px; position: relative; color: var(--ink); }
+  .pros-cons li::before { position: absolute; left: 0; font-weight: 800; }
+  .pros li::before { content: "+"; color: var(--good); }
+  .cons li::before { content: "–"; color: var(--crit); }
+  .empty-note { font-size: 13px; color: var(--ink-faint); font-style: italic; }
+
+  .sources-block h4 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 10px; color: var(--ink-faint); }
+  .source-item {
+    border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .source-item.excluded { opacity: 0.55; }
+  .source-item .s-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+  .source-item .s-name { font-weight: 700; font-size: 13.5px; }
+  .source-item a { color: var(--accent-ink); text-decoration: none; font-size: 12px; word-break: break-all; }
+  .source-item a:hover { text-decoration: underline; }
+  .s-meta { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; }
+  .s-meta b { color: var(--ink); }
+  .s-summary { font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.5; }
+
+  .pc-footer {
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-faint); display: flex; gap: 16px; flex-wrap: wrap;
+  }
+
+  .error-card { border-left: 4px solid var(--crit); }
+  .error-card .pc-summary { color: var(--crit); }
+
+  #jsonView { display: none; }
+  #jsonView.active { display: block; }
+  #readingView.active { display: block; }
+  #readingView, #jsonView { display: none; }
+
+  .json-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .btn-copy {
+    background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-soft);
+    padding: 7px 13px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .btn-copy:hover { border-color: var(--accent); color: var(--accent-ink); }
+  pre.json-block {
+    background: #10141c; color: #cfd8e8; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6;
+    border-radius: var(--radius); padding: 20px; overflow-x: auto; max-height: 720px; overflow-y: auto;
+    margin: 0; box-shadow: var(--shadow);
+  }
+  .jv-key { color: #7aa2f7; }
+  .jv-str { color: #9ece6a; }
+  .jv-num { color: #e0af68; }
+  .jv-bool { color: #bb9af7; }
+  .jv-null { color: #f7768e; }
+
+  [hidden] { display: none !important; }
+  @media (max-width: 620px) {
+    .product-row { grid-template-columns: 1fr 36px; }
+    .product-row input[name="sku"] { grid-column: 1 / -1; }
+    .pros-cons { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="inner">
+    <div class="brand">
+      <div class="mark">RB</div>
+      <div>
+        <h1>ReviewBridge</h1>
+        <p>AI product review research — powered by OpenAI web search</p>
+      </div>
+    </div>
+    <div class="status-pill"><span class="dot"></span>Server ready</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section id="setup">
+    <h2 class="section-title">Products to research</h2>
+    <p class="section-hint">Add at least two products. Each one is researched independently — real web search, real product-match validation, real reviews.</p>
+    <div class="card">
+      <div id="productRows"></div>
+      <div class="setup-actions">
+        <button type="button" class="btn-add" id="addRowBtn">+ Add another product</button>
+        <span class="hint-min">Minimum 2 products &middot; up to 8 per batch</span>
+      </div>
+    </div>
+    <div class="cta-row">
+      <span id="formError"></span>
+      <button type="button" class="btn-primary" id="startBtn">Start Research</button>
+    </div>
+  </section>
+
+  <section id="progress" hidden>
+    <div class="card">
+      <div class="progress-head">
+        <span class="label"><span class="spinner"></span>&nbsp; Researching&hellip;</span>
+        <span class="elapsed" id="elapsed">0s elapsed</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+      <div class="progress-sub" id="progressSub">Starting&hellip;</div>
+      <div class="log-panel" id="logPanel"></div>
+    </div>
+  </section>
+
+  <section id="results" hidden>
+    <div class="summary-bar">
+      <div class="summary-stat"><div class="n" id="sumTotal">0</div><div class="k">Products</div></div>
+      <div class="summary-stat"><div class="n" id="sumSuccess">0</div><div class="k">Succeeded</div></div>
+      <div class="summary-stat"><div class="n" id="sumSources">0</div><div class="k">Valid sources</div></div>
+      <div class="spacer"></div>
+      <button type="button" class="btn-reset" id="resetBtn">New batch</button>
+    </div>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="reading">Reading view</button>
+      <button type="button" class="tab-btn" data-tab="json">JSON output</button>
+    </div>
+
+    <div id="readingView" class="active"></div>
+    <div id="jsonView">
+      <div class="json-toolbar"><button type="button" class="btn-copy" id="copyJsonBtn">Copy JSON</button></div>
+      <pre class="json-block" id="jsonBlock"></pre>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var MAX_ROWS = 8;
+  var els = {
+    productRows: document.getElementById("productRows"),
+    addRowBtn: document.getElementById("addRowBtn"),
+    startBtn: document.getElementById("startBtn"),
+    formError: document.getElementById("formError"),
+    setup: document.getElementById("setup"),
+    progress: document.getElementById("progress"),
+    results: document.getElementById("results"),
+    barFill: document.getElementById("barFill"),
+    progressSub: document.getElementById("progressSub"),
+    elapsed: document.getElementById("elapsed"),
+    logPanel: document.getElementById("logPanel"),
+    resetBtn: document.getElementById("resetBtn"),
+    readingView: document.getElementById("readingView"),
+    jsonView: document.getElementById("jsonView"),
+    jsonBlock: document.getElementById("jsonBlock"),
+    copyJsonBtn: document.getElementById("copyJsonBtn"),
+    sumTotal: document.getElementById("sumTotal"),
+    sumSuccess: document.getElementById("sumSuccess"),
+    sumSources: document.getElementById("sumSources"),
+  };
+
+  var rowSeq = 0;
+  var pollTimer = null;
+  var elapsedTimer = null;
+  var jobStartedAt = null;
+
+  function addRow(name, sku) {
+    rowSeq++;
+    var row = document.createElement("div");
+    row.className = "product-row";
+    row.dataset.rowId = String(rowSeq);
+    row.innerHTML =
+      '<div class="idx">Product ' + rowSeq + '</div>' +
+      '<input type="text" name="name" placeholder="Product name, e.g. Bromic Heating Eclipse Smart-Heat Electric Portable" value="' + escapeAttr(name || "") + '" />' +
+      '<input type="text" name="sku" placeholder="SKU (optional)" value="' + escapeAttr(sku || "") + '" />' +
+      '<button type="button" class="row-remove" title="Remove product">&times;</button>';
+    els.productRows.appendChild(row);
+    row.querySelector(".row-remove").addEventListener("click", function () {
+      row.remove();
+      renumberRows();
+      validateForm();
+    });
+    row.querySelectorAll("input").forEach(function (inp) {
+      inp.addEventListener("input", validateForm);
+    });
+    renumberRows();
+  }
+
+  function renumberRows() {
+    var rows = els.productRows.querySelectorAll(".product-row");
+    rows.forEach(function (row, i) {
+      row.querySelector(".idx").textContent = "Product " + (i + 1);
+      var removeBtn = row.querySelector(".row-remove");
+      removeBtn.disabled = rows.length <= 2;
+    });
+    els.addRowBtn.disabled = rows.length >= MAX_ROWS;
+  }
+
+  function currentProducts() {
+    var rows = els.productRows.querySelectorAll(".product-row");
+    var out = [];
+    rows.forEach(function (row) {
+      var name = row.querySelector('input[name="name"]').value.trim();
+      var sku = row.querySelector('input[name="sku"]').value.trim();
+      if (name) out.push({ name: name, sku: sku || null });
+    });
+    return out;
+  }
+
+  function validateForm() {
+    var products = currentProducts();
+    var rows = els.productRows.querySelectorAll(".product-row").length;
+    var ok = products.length >= 2 && products.length === rows;
+    els.startBtn.disabled = !ok;
+    els.formError.textContent = "";
+    return ok;
+  }
+
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  addRow("", "");
+  addRow("", "");
+  els.addRowBtn.addEventListener("click", function () { addRow("", ""); });
+  validateForm();
+
+  /* ---------------- submit + polling ---------------- */
+
+  els.startBtn.addEventListener("click", function () {
+    if (!validateForm()) return;
+    var products = currentProducts();
+    els.startBtn.disabled = true;
+    els.formError.textContent = "";
+
+    fetch("/api/research", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ products: products }),
+    })
+      .then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; });
+      })
+      .then(function (r) {
+        if (!r.ok) {
+          els.formError.textContent = r.body.error || "Could not start research.";
+          els.startBtn.disabled = false;
+          return;
+        }
+        beginProgressUI(products.length);
+        pollJob(r.body.jobId);
+      })
+      .catch(function (err) {
+        els.formError.textContent = "Could not reach the server: " + err.message;
+        els.startBtn.disabled = false;
+      });
+  });
+
+  function beginProgressUI(total) {
+    els.setup.hidden = true;
+    els.results.hidden = true;
+    els.progress.hidden = false;
+    els.logPanel.textContent = "";
+    els.barFill.style.width = "4%";
+    els.progressSub.innerHTML = "Starting batch of <b>" + total + "</b> product(s)&hellip;";
+    jobStartedAt = Date.now();
+    elapsedTimer = setInterval(function () {
+      var s = Math.floor((Date.now() - jobStartedAt) / 1000);
+      els.elapsed.textContent = s + "s elapsed";
+    }, 1000);
+  }
+
+  function pollJob(jobId) {
+    fetch("/api/research/" + jobId)
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(function (job) {
+        renderProgress(job);
+        if (job.status === "running") {
+          pollTimer = setTimeout(function () { pollJob(jobId); }, 1400);
+        } else {
+          finishProgressUI(job);
+        }
+      })
+      .catch(function (err) {
+        els.progressSub.textContent = "Lost connection to the server: " + err.message;
+      });
+  }
+
+  function renderProgress(job) {
+    var pct = job.total ? Math.max(6, Math.round((job.completedIndex / job.total) * 100)) : 6;
+    els.barFill.style.width = pct + "%";
+    var current = job.currentProduct
+      ? "Researching <b>" + escapeHtml(job.currentProduct) + "</b> (" + (job.completedIndex + 1) + " of " + job.total + ")"
+      : "Finishing up&hellip;";
+    els.progressSub.innerHTML = current;
+    els.logPanel.innerHTML = job.logLines.map(function (l) {
+      return '<div class="line">' + escapeHtml(l) + "</div>";
+    }).join("");
+    els.logPanel.scrollTop = els.logPanel.scrollHeight;
+  }
+
+  function finishProgressUI(job) {
+    clearInterval(elapsedTimer);
+    els.progress.hidden = true;
+    els.startBtn.disabled = false;
+    renderResults(job);
+  }
+
+  /* ---------------- results ---------------- */
+
+  var lastJob = null;
+
+  function renderResults(job) {
+    lastJob = job;
+    els.results.hidden = false;
+
+    var succeeded = job.results.filter(function (r) { return r.report; });
+    var totalValidSources = succeeded.reduce(function (sum, r) {
+      return sum + (r.report.overall.total_valid_sources || 0);
+    }, 0);
+
+    els.sumTotal.textContent = job.results.length;
+    els.sumSuccess.textContent = succeeded.length;
+    els.sumSources.textContent = totalValidSources;
+
+    els.readingView.innerHTML = job.results.map(renderProductCard).join("");
+    els.jsonBlock.innerHTML = syntaxHighlightJson(JSON.stringify(job.results, null, 2));
+  }
+
+  function renderProductCard(r) {
+    if (!r.report) {
+      return (
+        '<div class="product-card error-card">' +
+        '<div class="pc-head"><div><h3>' + escapeHtml(r.requested_name) + '</h3>' +
+        '<div class="requested">' + (r.sku ? "SKU " + escapeHtml(r.sku) : "no SKU provided") + "</div></div>" +
+        '<span class="badge status-ERROR">RESEARCH FAILED</span></div>' +
+        '<p class="pc-summary">' + escapeHtml(r.error || "Unknown error.") + "</p>" +
+        "</div>"
+      );
+    }
+
+    var rep = r.report;
+    var p = rep.product;
+    var displayName = p.canonical_name || p.requested_name;
+    var subtitleParts = [];
+    if (displayName !== p.requested_name) subtitleParts.push("requested as “" + escapeHtml(p.requested_name) + "”");
+    if (p.sku) subtitleParts.push("SKU <code>" + escapeHtml(p.sku) + "</code>");
+    if (p.identified_brand) subtitleParts.push(escapeHtml(p.identified_brand));
+
+    var sentimentHtml = rep.overall.sentiment
+      ? '<span class="badge status-SUCCESS" style="background:var(--accent-wash);color:var(--accent-ink)">' + escapeHtml(rep.overall.sentiment.replace(/_/g, " ")) + "</span>"
+      : "";
+
+    var prosHtml = rep.pros.length
+      ? '<ul class="pros">' + rep.pros.map(function (x) { return "<li>" + escapeHtml(x) + "</li>"; }).join("") + "</ul>"
+      : '<p class="empty-note">No consistent pros identified.</p>';
+    var consHtml = rep.cons.length
+      ? '<ul class="cons">' + rep.cons.map(function (x) { return "<li>" + escapeHtml(x) + "</li>"; }).join("") + "</ul>"
+      : '<p class="empty-note">No consistent cons identified.</p>';
+
+    var sourcesHtml = rep.sources.length
+      ? rep.sources.map(renderSourceItem).join("")
+      : '<p class="empty-note">No review sources could be confidently matched to this product.</p>';
+
+    return (
+      '<div class="product-card">' +
+        '<div class="pc-head">' +
+          "<div><h3>" + escapeHtml(displayName) + "</h3>" +
+          (subtitleParts.length ? '<div class="requested">' + subtitleParts.join(" &middot; ") + "</div>" : "") +
+          "</div>" +
+          '<span class="badge status-' + rep.research_status + '">' + rep.research_status.replace(/_/g, " ") + "</span>" +
+        "</div>" +
+        (rep.overall.sentiment || rep.overall.summary
+          ? '<div class="sentiment-row">' + sentimentHtml + "</div>" +
+            (rep.overall.summary ? '<p class="pc-summary">' + escapeHtml(rep.overall.summary) + "</p>" : "")
+          : '<p class="pc-summary">Not enough public review data was found to summarise.</p>') +
+        '<div class="pros-cons">' +
+          '<div><h4>Common pros</h4>' + prosHtml + "</div>" +
+          '<div><h4>Common cons</h4>' + consHtml + "</div>" +
+        "</div>" +
+        '<div class="sources-block"><h4>Sources (' + rep.overall.total_valid_sources + ' of ' + rep.sources.length + ' used)</h4>' + sourcesHtml + "</div>" +
+        '<div class="pc-footer">' +
+          "<span>" + rep.meta.sources_analyzed + " source(s) analysed</span>" +
+          "<span>" + rep.meta.run_seconds + "s research time</span>" +
+          (rep.meta.registry && rep.meta.registry.reused_from_cache
+            ? "<span>" + rep.meta.registry.reused_from_cache + " source(s) reused from prior research</span>"
+            : "") +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderSourceItem(s) {
+    var cls = "source-item" + (s.included_in_analysis ? "" : " excluded");
+    var rating = s.rating != null ? s.rating + " / " + (s.rating_scale || "?") : "no rating found";
+    return (
+      '<div class="' + cls + '">' +
+        '<div class="s-top">' +
+          '<span class="s-name">' + escapeHtml(s.source_name) + "</span>" +
+          '<span class="badge match-' + s.match_status + '">' + s.match_status.replace(/_/g, " ") + "</span>" +
+        "</div>" +
+        '<a href="' + escapeAttr(s.source_url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(s.source_url) + "</a>" +
+        '<div class="s-meta">' +
+          "<span><b>Rating:</b> " + escapeHtml(rating) + "</span>" +
+          "<span><b>Reviews:</b> " + (s.review_count != null ? s.review_count : "unknown") + "</span>" +
+          "<span><b>Status:</b> " + s.extraction_status.replace(/_/g, " ") + "</span>" +
+        "</div>" +
+        (s.review_summary ? '<div class="s-summary">' + escapeHtml(s.review_summary) + "</div>" : "") +
+      "</div>"
+    );
+  }
+
+  function syntaxHighlightJson(json) {
+    var esc = json.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return esc.replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+      function (match) {
+        var cls = "jv-num";
+        if (/^"/.test(match)) cls = /:$/.test(match) ? "jv-key" : "jv-str";
+        else if (/true|false/.test(match)) cls = "jv-bool";
+        else if (/null/.test(match)) cls = "jv-null";
+        return '<span class="' + cls + '">' + match + "</span>";
+      }
+    );
+  }
+
+  /* ---------------- tabs / reset / copy ---------------- */
+
+  document.querySelectorAll(".tab-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".tab-btn").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      var tab = btn.dataset.tab;
+      els.readingView.classList.toggle("active", tab === "reading");
+      els.jsonView.classList.toggle("active", tab === "json");
+    });
+  });
+
+  els.copyJsonBtn.addEventListener("click", function () {
+    if (!lastJob) return;
+    navigator.clipboard.writeText(JSON.stringify(lastJob.results, null, 2)).then(function () {
+      var old = els.copyJsonBtn.textContent;
+      els.copyJsonBtn.textContent = "Copied!";
+      setTimeout(function () { els.copyJsonBtn.textContent = old; }, 1400);
+    });
+  });
+
+  els.resetBtn.addEventListener("click", function () {
+    els.results.hidden = true;
+    els.setup.hidden = false;
+    els.productRows.innerHTML = "";
+    rowSeq = 0;
+    addRow("", "");
+    addRow("", "");
+    validateForm();
+  });
+})();
+</script>
+</body>
+</html>

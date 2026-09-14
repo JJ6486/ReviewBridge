@@ -1,9 +1,10 @@
 /**
  * Product Input.
  *
- * Hardcoded test products for the Proof of Concept. Change `ACTIVE_PRODUCT`
- * to point at whichever entry you want to research, or add a new one.
- * No Shopify, no database — just an object.
+ * Hardcoded test products for the Proof of Concept. Add entries to `PRODUCTS`,
+ * then list whichever ones you want researched (in order) in `ACTIVE_PRODUCTS`.
+ * `npm start` loops over that array, one full pipeline run per product.
+ * No Shopify, no database — just an array.
  */
 
 export interface ProductInput {
@@ -18,20 +19,40 @@ export interface ProductInput {
 }
 
 export const PRODUCTS = {
-  emuLongtail: {
-    name: "EMU Longtail Electric Cargo Bike",
-    sku: "CAR20BF",
+  h2ohottub: {
+    name: "H2O Hottubs 6000 Series 32A Twin Pump 6 Person",
+    sku: "H2O6000SER",
     model: null,
-    notes: "UK e-bike brand 'EMU'. Longtail cargo format.",
+    notes: "",
   },
-  eleglideM2Mopride: {
-    name: "Eleglide M2 Mopride Mountain E-Bike 250W",
-    sku: null,
-    model: "M2 Mopride",
-    notes:
-      "Must NOT be confused with: Eleglide M2 250W, Eleglide M2 Pro 500W, Eleglide M1.",
+  bromicheating: {
+    name: "Bromic Heating Eclipse Smart-Heat™ Electric Portable",
+    sku: "BH0820011",
+    model: null,
+    notes: "",
   },
+  mark2scrambler: {
+    name: "Mark2 Scrambler CL Mid Drive 90nm Torque Rockshox Suspension Electric Bike 250W",
+    sku: "M1B1727K12",
+    model:"",
+    notes:""
+  },
+  eggreen:{
+    name:"Ezego Trail Destroyer II Electric Mountain Bike 2025",
+    sku:"EZE24-014-15-GREEN",
+    model:"",
+    notes:""
+  }
 } satisfies Record<string, ProductInput>;
 
-/** The product the pipeline will research when you run `npm start`. */
-export const ACTIVE_PRODUCT: ProductInput = PRODUCTS.emuLongtail;
+/**
+ * The products `npm start` researches, in order — one full pipeline run (and
+ * one JSON report) per entry. Add/remove/reorder freely; each run costs its
+ * own ~$0.04–$0.10 (see the usage/cost summary printed after each product).
+ */
+export const ACTIVE_PRODUCTS: ProductInput[] = [
+  PRODUCTS.mark2scrambler,
+  PRODUCTS.eggreen,
+  PRODUCTS.bromicheating,
+  PRODUCTS.h2ohottub
+];

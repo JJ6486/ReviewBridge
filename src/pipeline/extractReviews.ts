@@ -4,6 +4,7 @@
  */
 import { log } from "../logger.js";
 import { respond } from "../openai.js";
+import { sameUrl } from "../registry.js";
 import { extractPrompt, SYSTEM_CORE } from "../prompts.js";
 import type { ProductInput } from "../products.js";
 import {
@@ -95,10 +96,4 @@ export async function extractReviews(
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.min(1, Math.max(0, n));
-}
-
-function sameUrl(a: string, b: string): boolean {
-  const n = (u: string) =>
-    u.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[#?].*$/, "").replace(/\/$/, "");
-  return Boolean(a) && n(a) === n(b);
 }

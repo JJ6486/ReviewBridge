@@ -18,6 +18,16 @@ function redact(value: unknown): unknown {
   return value;
 }
 
+/** Optional subscribers (e.g. the web server) that want a copy of every printed line. */
+type LineListener = (line: string) => void;
+const listeners = new Set<LineListener>();
+
+/** Subscribe to every log line as plain text. Returns an unsubscribe function. */
+export function onLogLine(fn: LineListener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
 function emit(level: Level, msg: string, extra?: unknown): void {
   if (LEVELS[level] < threshold) return;
   const time = new Date().toISOString();
@@ -25,6 +35,7 @@ function emit(level: Level, msg: string, extra?: unknown): void {
   const stream = level === "error" || level === "warn" ? console.error : console.log;
   if (extra !== undefined) stream(line, redact(extra));
   else stream(line);
+  if (listeners.size) for (const fn of listeners) fn(line);
 }
 
 export const log = {

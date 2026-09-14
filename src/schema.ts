@@ -234,6 +234,19 @@ export const FinalReport = z.object({
     candidates_discovered: z.number().int().min(0),
     sources_selected: z.number().int().min(0),
     sources_analyzed: z.number().int().min(0),
+    registry: z.object({
+      enabled: z.boolean(),
+      product_key: z.string(),
+      known_trusted: z.number().int().min(0),
+      known_bad: z.number().int().min(0),
+      reused_from_cache: z.number().int().min(0),
+      refreshed: z.number().int().min(0),
+      skipped_known_bad: z.number().int().min(0),
+      new_sources_recorded: z.number().int().min(0),
+      web_discovery_skipped: z.boolean(),
+      estimated_cost_saved_usd: z.number(),
+      estimated_cost_utilized_usd: z.number(),
+    }),
   }),
 });
 export type FinalReport = z.infer<typeof FinalReport>;

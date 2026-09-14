@@ -20,6 +20,14 @@ function int(name: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function bool(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
+const maxSources = int("MAX_SOURCES", 5);
+
 export const config = {
   openaiApiKey: str("OPENAI_API_KEY"),
 
@@ -30,7 +38,7 @@ export const config = {
   openaiModel: str("OPENAI_MODEL", "gpt-4.1-mini"),
 
   /** After discovery, at most this many sources are collected/analysed. */
-  maxSources: int("MAX_SOURCES", 5),
+  maxSources,
 
   /** Target number of deliberate, review-focused search queries (3–5). */
   searchQueryCount: Math.min(6, Math.max(3, int("SEARCH_QUERIES", 5))),
@@ -38,7 +46,20 @@ export const config = {
   /** Where the JSON report is written. */
   outputDir: "output",
 
+  // ---- Review Source Registry (data/review-source-registry.json) ----
+  /** Persist + reuse validated review sources across runs, per product identity. */
+  registryEnabled: bool("REGISTRY_ENABLED", true),
+  /** JSON file the registry is stored in — plain fs, no DB. */
+  registryPath: str("REGISTRY_PATH", "data/review-source-registry.json"),
+  /** A trusted source older than this is re-verified before reuse, not reused blindly. */
+  registryTtlHours: int("REGISTRY_TTL_HOURS", 168),
+  /** Known sources must yield at least this many usable matches to skip web discovery. */
+  registryMinSources: Math.max(1, Math.min(maxSources, int("REGISTRY_MIN_SOURCES", 2))),
+
   logLevel: str("LOG_LEVEL", "info"),
+
+  /** Port for the optional web UI (`npm run web`). */
+  port: int("PORT", 3000),
 } as const;
 
 export type Config = typeof config;
