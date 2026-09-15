@@ -1,6 +1,11 @@
 node_modules/
 dist/
 output/
-*.env*
+.env
+.env.*
+!.env.example
 *.log
 .DS_Store
+
+# Regenerated cache, not source — keep it out of git history.
+data/review-source-registry.json
