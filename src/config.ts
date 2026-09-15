@@ -58,7 +58,7 @@ export const config = {
 
   logLevel: str("LOG_LEVEL", "info"),
 
-  /** Port for the optional web UI (`npm run web`). */
+  /** Port for the web server (`npm run dev`). */
   port: int("PORT", 3000),
 } as const;
 

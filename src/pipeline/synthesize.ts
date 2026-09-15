@@ -13,7 +13,7 @@ export async function synthesize(
   validSources: CollectedSource[],
 ): Promise<AnalysisResult> {
   if (validSources.length === 0) {
-    log.detail("no valid sources — skipping synthesis (no model call)");
+    log.ui("no valid sources — skipping synthesis (no model call)");
     return {
       sentiment: "INSUFFICIENT_DATA",
       summary:
@@ -47,8 +47,8 @@ export async function synthesize(
     maxOutputTokens: 4_000,
   });
 
-  log.detail(`sentiment: ${data.sentiment}`);
-  log.detail(`pros: ${data.pros.join(" | ") || "(none)"}`);
-  log.detail(`cons: ${data.cons.join(" | ") || "(none)"}`);
+  log.ui(`sentiment: ${data.sentiment}`);
+  log.ui(`pros: ${data.pros.join(" | ") || "(none)"}`);
+  log.ui(`cons: ${data.cons.join(" | ") || "(none)"}`);
   return data;
 }

@@ -195,6 +195,23 @@ export const Failure = z.object({
 });
 export type Failure = z.infer<typeof Failure>;
 
+/**
+ * Deterministically computed in `validateOutput.ts` from already-guardrailed
+ * source ratings only (never model-generated) — see that file for the formula.
+ */
+export const AverageRating = z.object({
+  /** Weighted mean, normalised to a /5 scale. null if no valid source has a rating. */
+  value: z.number().nullable(),
+  scale: z.literal(5),
+  /** Sum of the real review_count values reported by contributing sources. */
+  review_count: z.number().int().min(0),
+  /** How many valid sources contributed a rating to this figure. */
+  sources_with_rating: z.number().int().min(0),
+  method: z.enum(["WEIGHTED_BY_REVIEW_COUNT", "INSUFFICIENT_DATA"]),
+  note: z.string(),
+});
+export type AverageRating = z.infer<typeof AverageRating>;
+
 export const FinalReport = z.object({
   product: z.object({
     requested_name: z.string(),
@@ -213,6 +230,7 @@ export const FinalReport = z.object({
     total_valid_sources: z.number().int().min(0),
     combined_rating: z.null(),
     combined_rating_note: z.string(),
+    average_rating: AverageRating,
   }),
 
   pros: z.array(z.string()),

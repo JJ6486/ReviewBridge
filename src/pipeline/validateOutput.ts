@@ -4,7 +4,7 @@
  * or throws. No model calls here.
  */
 import { log } from "../logger.js";
-import { FinalReport, type FinalSource } from "../schema.js";
+import { FinalReport, type AverageRating, type FinalSource } from "../schema.js";
 
 /** LIKELY_MATCH is only usable at/above this confidence. */
 export const LIKELY_MATCH_MIN_CONFIDENCE = 0.7;
@@ -52,14 +52,66 @@ export function validateOutput(draft: unknown): FinalReport {
       ? `Per-source ratings only (this PoC does not compute a combined rating). ${rated} valid source(s) carry a product rating.`
       : `No combined rating: only ${rated} valid source(s) with a product rating. Per-source ratings are the reliable signal.`;
 
+  // 4b. weighted average star rating — arithmetic over already-guardrailed
+  // source ratings only, never model-generated. See computeAverageRating().
+  report.overall.average_rating = computeAverageRating(usable);
+
   report.warnings = [...warnings];
 
   const finalReport = FinalReport.parse(report); // 5. re-validate after mutation
-  log.detail(
+  const avg = finalReport.overall.average_rating;
+  log.ui(
     `valid: ${finalReport.overall.total_valid_sources}/${finalReport.sources.length} sources, ` +
-      `${finalReport.failures.length} failure(s), ${finalReport.warnings.length} warning(s)`,
+      `${finalReport.failures.length} failure(s), ${finalReport.warnings.length} warning(s)` +
+      (avg.value != null ? ` — average rating ${avg.value}/5 (${avg.review_count} reviews)` : ""),
   );
   return finalReport;
+}
+
+/**
+ * Weighted average, normalised to /5. Weighted by each source's review_count
+ * (unknown counts weigh as 1) — a page with 200 reviews should outweigh one
+ * with 2. Only ever reads `rating`/`rating_scale`/`review_count` fields that
+ * already survived `guardSource` above, so this can't surface a rating the
+ * per-source guardrails already rejected.
+ */
+function computeAverageRating(usable: FinalSource[]): AverageRating {
+  const rated = usable.filter((s) => s.rating != null);
+  if (rated.length === 0) {
+    return {
+      value: null,
+      scale: 5,
+      review_count: 0,
+      sources_with_rating: 0,
+      method: "INSUFFICIENT_DATA",
+      note: "No valid source carried a confirmed product rating.",
+    };
+  }
+
+  let weightedSum = 0;
+  let weightTotal = 0;
+  let reviewCountSum = 0;
+  for (const s of rated) {
+    const scale = s.rating_scale ?? 5;
+    const normalised = scale > 0 ? (s.rating! / scale) * 5 : s.rating!;
+    const weight = s.review_count != null && s.review_count > 0 ? s.review_count : 1;
+    weightedSum += normalised * weight;
+    weightTotal += weight;
+    reviewCountSum += s.review_count ?? 0;
+  }
+  const value = weightTotal > 0 ? Math.round((weightedSum / weightTotal) * 10) / 10 : null;
+
+  return {
+    value,
+    scale: 5,
+    review_count: reviewCountSum,
+    sources_with_rating: rated.length,
+    method: "WEIGHTED_BY_REVIEW_COUNT",
+    note:
+      `Weighted average of ${rated.length} source rating(s), each normalised to /5 and weighted ` +
+      `by its review count (an unknown count weighs as 1). ${reviewCountSum} known review(s) ` +
+      "contributed across those sources.",
+  };
 }
 
 function guardSource(s: FinalSource, warnings: Set<string>): void {

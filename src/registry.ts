@@ -166,11 +166,9 @@ function slug(s: string): string {
  * fields — rather than the model's `identified_brand` / `canonical_name`,
  * which are free text the model rephrases slightly on every run (confirmed by
  * testing: the same product produced two different canonical-name strings
- * across two back-to-back runs). A stable key is what makes "same product,
- * next run" actually match; the LLM-identified brand/canonical name are still
- * stored in `product_identity` for humans reading the registry file, just not
- * used to compute the key. If two real variants share a name but need
- * distinct review pools, give them distinct `sku`s or `name`s upstream.
+ * across two back-to-back runs). This is what gets written to `product_key`
+ * on each entry, for humans reading the registry file — lookups themselves
+ * go through `identityMatches` below, not string equality on this key.
  */
 export function computeProductKey(identity: {
   requested_name: string;
@@ -179,6 +177,31 @@ export function computeProductKey(identity: {
   const name = slug(identity.requested_name);
   const sku = identity.sku ? slug(identity.sku) : "";
   return sku ? `${name}__${sku}` : name;
+}
+
+/**
+ * Whether an existing registry entry's identity should be treated as "the
+ * same product" as the identity of the current request.
+ *
+ * OR, not AND: a SKU match alone is enough (two listings can be phrased
+ * completely differently and still be the same SKU), and a name match alone
+ * is enough (a product may have no SKU at all). This replaced matching on
+ * the combined `product_key` string, which required the SKU (when present)
+ * AND the exact name text to both line up — so a request with a known SKU
+ * but slightly different name text, or vice versa, missed the cache
+ * entirely. Name comparison goes through `slug()`, so blank-space/casing/
+ * punctuation-only differences never break the match — but this is still
+ * exact-name matching otherwise: "...Electric Portable" and "...Electric
+ * Portable Heater" are different strings, not a spacing difference, so
+ * without a shared SKU they are still treated as different products and
+ * will NOT share cached sources.
+ */
+function identityMatches(
+  entry: { requested_name: string; sku: string | null },
+  identity: { requested_name: string; sku: string | null },
+): boolean {
+  if (entry.sku && identity.sku && slug(entry.sku) === slug(identity.sku)) return true;
+  return slug(entry.requested_name) === slug(identity.requested_name);
 }
 
 /* ---------------- status derivation ---------------- */
@@ -239,13 +262,13 @@ export class ReviewSourceRegistry {
     this.dirty = false;
   }
 
-  private forProduct(productKey: string): RegistryEntry[] {
-    return this.entries.filter((e) => e.product_key === productKey);
+  private forProduct(identity: { requested_name: string; sku: string | null }): RegistryEntry[] {
+    return this.entries.filter((e) => identityMatches(e.product_identity, identity));
   }
 
   /** Trusted sources for a product, best (confidence, then review count) first. */
-  getTrusted(productKey: string): RegistryEntry[] {
-    return this.forProduct(productKey)
+  getTrusted(identity: { requested_name: string; sku: string | null }): RegistryEntry[] {
+    return this.forProduct(identity)
       .filter((e) => e.status === "TRUSTED")
       .sort(
         (a, b) => b.match_confidence - a.match_confidence || (b.review_count ?? 0) - (a.review_count ?? 0),
@@ -253,8 +276,8 @@ export class ReviewSourceRegistry {
   }
 
   /** Everything on file for this product that is NOT currently trusted. */
-  getKnownBad(productKey: string): RegistryEntry[] {
-    return this.forProduct(productKey).filter((e) => e.status !== "TRUSTED");
+  getKnownBad(identity: { requested_name: string; sku: string | null }): RegistryEntry[] {
+    return this.forProduct(identity).filter((e) => e.status !== "TRUSTED");
   }
 
   isFresh(entry: RegistryEntry): boolean {
@@ -263,9 +286,11 @@ export class ReviewSourceRegistry {
   }
 
   /** Mark a cache hit — reused without re-verification this run. */
-  markReused(url: string, productKey: string): void {
+  markReused(url: string, identity: { requested_name: string; sku: string | null }): void {
     const key = dedupeKey(url);
-    const e = this.entries.find((x) => x.product_key === productKey && dedupeKey(x.url) === key);
+    const e = this.entries.find(
+      (x) => identityMatches(x.product_identity, identity) && dedupeKey(x.url) === key,
+    );
     if (e) {
       e.times_reused += 1;
       this.dirty = true;
@@ -300,7 +325,7 @@ export class ReviewSourceRegistry {
     const now = new Date().toISOString();
     const key = dedupeKey(norm.url);
     const idx = this.entries.findIndex(
-      (e) => e.product_key === input.product_key && dedupeKey(e.url) === key,
+      (e) => identityMatches(e.product_identity, input.product_identity) && dedupeKey(e.url) === key,
     );
     const prev = idx >= 0 ? this.entries[idx] : undefined;
     const entry: RegistryEntry = {

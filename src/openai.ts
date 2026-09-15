@@ -105,7 +105,7 @@ export async function respond<T extends z.ZodTypeAny>(
   usage.record(res.usage, billableSearchCalls);
 
   const u = res.usage;
-  log.detail(
+  log.ui(
     `api [${label}]: ${u?.input_tokens ?? "?"} in` +
       (u?.input_tokens_details?.cached_tokens
         ? ` (${u.input_tokens_details.cached_tokens} cached)`
@@ -116,8 +116,8 @@ export async function respond<T extends z.ZodTypeAny>(
         : "") +
       (billableSearchCalls ? ` | ${billableSearchCalls} web-search action(s)` : ""),
   );
-  for (const q of searchQueries) log.detail(`  search: "${q}"`);
-  for (const p of openedPages) log.detail(`  open_page: ${p}`);
+  for (const q of searchQueries) log.ui(`  search: "${q}"`);
+  for (const p of openedPages) log.ui(`  open_page: ${p}`);
 
   const parsed = res.output_parsed;
   if (parsed == null) {

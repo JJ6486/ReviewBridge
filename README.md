@@ -104,75 +104,69 @@ to disable it and always run full discovery.
 
 ```
 src/
-  config.ts                env: OPENAI_API_KEY, OPENAI_MODEL, MAX_SOURCES, LOG_LEVEL, REGISTRY_*
-  logger.ts                leveled logging, [n/5] steps, sk-... redaction
-  products.ts              hardcoded test products — PRODUCTS map + ACTIVE_PRODUCTS[]
+  config.ts                env: OPENAI_API_KEY, OPENAI_MODEL, MAX_SOURCES, LOG_LEVEL, PORT, REGISTRY_*
+  logger.ts                leveled logging: console gets everything, the web UI's live
+                           log panel gets a curated subset (log.ui vs log.detail)
+  products.ts              ProductInput — the shape every submitted product takes
   pricing.ts               THE pricing table (per-1M token rates + $10/1k web search)
   usage.ts                 token/cost accumulator, fed by every API response
   openai.ts                OpenAI client + respond() — the one structured-call helper
   registry.ts              persistent review-source registry (data/review-source-registry.json):
                            URL normalisation, product-identity key, trusted/failed source store
   prompts.ts               all instruction text (plan / discover / extract / synthesize)
-  schema.ts                all Zod schemas incl. FinalReport + UsageSummary
+  schema.ts                all Zod schemas incl. FinalReport, UsageSummary, AverageRating
   orchestrator.ts          runs the 5 steps for one product (incl. registry reuse/write-back),
                            assembles + validates FinalReport
-  batchRunner.ts           runs the pipeline once per product; shared by CLI + web UI
+  batchRunner.ts           runs the pipeline once per product, in order
   reportStore.ts           writes a FinalReport to output/ as JSON
-  index.ts                 CLI entrypoint: loops ACTIVE_PRODUCTS, prints per-product + batch cost summary
-  server.ts                web UI server (node:http): serves public/index.html + job API
-public/
-  index.html               the single-page frontend (self-contained: inline CSS + JS, no build)
+  server.ts                the app itself (node:http): serves public/index.html + job API
   pipeline/
     planResearch.ts        [1/5]
     discoverSources.ts     [2/5] + [3/5] selection
     extractReviews.ts      [4/5]
     synthesize.ts          [5/5] analysis
-    validateOutput.ts      deterministic guards (no model call)
+    validateOutput.ts      deterministic guards incl. the weighted average rating (no model call)
+public/
+  index.html               the single-page frontend (self-contained: inline CSS + JS, no build)
 ```
 
 ---
 
 ## 4. Install & run
 
-Requires **Node.js ≥ 20**.
+Requires **Node.js ≥ 20**. There's no CLI mode — this is a web app.
 
 ```bash
 cd review-bridge
 npm install
 cp .env.example .env        # then set OPENAI_API_KEY
+npm run dev                 # → http://localhost:3000 (auto-restarts on file changes)
 ```
 
-### Web UI (for demos)
+For a production-style run (what a host runs after deploy):
 
 ```bash
-npm run web                 # → http://localhost:3000
+npm run build                # compiles src/ → dist/
+npm start                    # node dist/server.js
 ```
 
 A single self-contained page: enter **2 or more** products (name + optional
-SKU), hit **Start Research**, watch live progress with the real pipeline log,
+SKU), hit **Start Research**, watch live progress with a curated pipeline log,
 then read the results in either **Reading view** (formatted cards — status,
-sentiment, pros/cons, per-source ratings and links) or **JSON output** (the
-full machine-readable report, with a copy button). Runs the exact same
-`runBatch` pipeline as the CLI, writes the same JSON reports to `output/`, and
-feeds the same review-source registry. No build step, no framework — plain
-`node:http` + one static HTML file (`public/index.html`).
+average star rating, sentiment, pros/cons, per-source ratings and links) or
+**JSON output** (the full machine-readable report, with a copy button). No
+build step for local dev, no frontend framework — plain `node:http` + one
+static HTML file (`public/index.html`).
 
 The API key stays server-side; the browser only ever talks to
 `POST /api/research` and `GET /api/research/:id`. One batch runs at a time — a
 second submit while one is in flight gets a clear "already running" message.
 
-### CLI
-
-```bash
-npm start
-```
-
-`npm start` loops over `ACTIVE_PRODUCTS` in [`src/products.ts`](src/products.ts) —
-add entries to the `PRODUCTS` map and list the ones you want in `ACTIVE_PRODUCTS`
-(currently *EMU Longtail Electric Cargo Bike* and *Eleglide M2 Mopride*). Each
-product gets its own full pipeline run, its own JSON report, and its own line in
-the batch cost summary printed at the end. One product's failure doesn't stop
-the rest of the batch.
+> **Hosting note:** this is a long-running Node process with in-memory job
+> state — it needs a host that keeps a process alive (Render, Railway, Fly.io,
+> a VPS). It will **not** work as-is on Vercel's serverless functions (no
+> persistent `.listen()`, no shared memory between invocations, and both
+> `output/` and `data/review-source-registry.json` need a real filesystem).
 
 ### Environment variables
 
@@ -187,6 +181,7 @@ the rest of the batch.
 | `REGISTRY_PATH` | no | `data/review-source-registry.json` | Where the registry is stored — plain JSON, no DB. |
 | `REGISTRY_TTL_HOURS` | no | `168` (7 days) | A trusted source older than this is re-verified before reuse. |
 | `REGISTRY_MIN_SOURCES` | no | `2` | Known usable sources needed to skip web discovery (capped at `MAX_SOURCES`). |
+| `PORT` | no | `3000` | Port the server listens on. |
 
 ---
 
@@ -198,7 +193,13 @@ Validated against `FinalReport` in [`src/schema.ts`](src/schema.ts):
 {
   "product":  { "requested_name", "sku", "model", "identified_brand", "identified_model", "canonical_name" },
   "research_status": "SUCCESS | PARTIAL | NO_RELIABLE_SOURCES | PRODUCT_NOT_IDENTIFIED | FAILED",
-  "overall":  { "sentiment", "summary", "total_valid_sources", "combined_rating": null, "combined_rating_note" },
+  "overall":  {
+    "sentiment", "summary", "total_valid_sources",
+    "combined_rating": null, "combined_rating_note",     // deliberately never computed (see below)
+    "average_rating": {                                  // computed in code, not by the model — see §7
+      "value", "scale": 5, "review_count", "sources_with_rating", "method", "note"
+    }
+  },
   "pros": [], "cons": [],
   "sources": [{
     "source_name", "source_url", "product_name_found",
@@ -233,7 +234,28 @@ Validated against `FinalReport` in [`src/schema.ts`](src/schema.ts):
 
 `sources[]` contains every analysed source (including `NO_MATCH` / `UNCERTAIN`
 for transparency). Only `included_in_analysis: true` sources feed `overall`,
-`pros`, `cons`.
+`pros`, `cons`, and `average_rating`.
+
+### Average rating — computed, not modelled
+
+`overall.combined_rating` stays `null` on purpose (see below); `overall.average_rating`
+is a **new, separate field** that answers "what's the overall star rating" without
+reopening that guardrail:
+
+- Computed **in `validateOutput.ts`, in plain TypeScript** — never by the model.
+  It's arithmetic over `rating`/`rating_scale`/`review_count` fields that have
+  *already* passed every per-source guard (product-rating-vs-seller-rating check,
+  range check, match-confidence bar). It can't surface a number those guards
+  would have rejected.
+- **Weighted by review count.** Each valid source's rating is normalised to a
+  /5 scale, then combined as `Σ(rating × review_count) / Σ(review_count)` — a
+  page with 200 reviews outweighs one with 2. A source with an unknown review
+  count weighs as 1.
+- `value: null` (with `method: "INSUFFICIENT_DATA"`) when no valid source
+  carries a confirmed product rating — shown in the UI as "no aggregated
+  rating available", never a guessed number.
+- `review_count` is the sum of the *actual* review counts reported (not the
+  substituted weights), so it's an honest "N reviews", not inflated.
 
 ### Cost — read the label
 
@@ -260,6 +282,9 @@ for transparency). Only `included_in_analysis: true` sources feed `overall`,
   reported and priced as output tokens.
 - Matching is best-effort. `match_reasoning` is always included so a human can
   check. Only `EXACT_MATCH` / `LIKELY_MATCH ≥ 0.7` are trusted for the aggregate.
+- `average_rating` is one defensible methodology (weighted by review count),
+  not the only one — see §5. With only 1–2 sources (typical for this PoC) it's
+  really a small-sample estimate; treat it as directional, not authoritative.
 - `NO_RELIABLE_SOURCES` with few/no valid sources is **also a valid PoC result** —
   it tells you the approach doesn't work well for that product.
 - The registry key is `requested_name` + `sku`. If either changes in
@@ -271,57 +296,60 @@ for transparency). Only `included_in_analysis: true` sources feed `overall`,
 
 ---
 
-## 7. A successful run looks like
+## 7. What a successful run looks like
+
+The web UI's live log panel shows a curated subset of what actually runs —
+enough to narrate the pipeline without the full per-candidate/per-rejection
+dump (that full trail still goes to the server console, useful for your
+host's function/server logs). Real, captured output for one product, fresh
+(no registry cache yet):
 
 ```
-Provider: OpenAI
-Model: gpt-5.6-luna
-Max sources: 5
-Search strategy: OpenAI native web search
-...
-Product:                 EMU Longtail Electric Cargo Bike
-Research status:          SUCCESS
-Candidates found:         7
-Sources selected:         3
-Sources analyzed:         3
-Valid product matches:    2
-
-[✓ VALID] Cycling Electric      Product rating: 4.4 / 5   Review count: 12
-[✓ VALID] Example Retailer      Product rating: 4.6 / 5   Review count: 31
-
-Overall sentiment:       MOSTLY_POSITIVE
-Common pros:  + Ride stability   + Cargo capacity   + Value
-Common cons:  - Weight   - Assembly
-
-USAGE & COST
-  API requests:          4
-  Web searches:          8
-  Input tokens:          41,200 (3,900 cached)
-  Output tokens:         6,050 (2,100 reasoning)
-  Total tokens:          47,250
-  Estimated API cost:    $0.0900
-                         (input $0.0075 + cached $0.0001 + output $0.0073 + web search $0.0800)
+[1/5] Understanding product & planning searches
+      identified: H2O Hottubs / 6000 Series 32A Twin Pump 6 Person — H2O Hottubs 6000 Series 32A Twin Pump 6-Person Hot Tub
+[2/5] Checking review-source registry
+      0 known trusted source(s), 0 known-bad source(s) on file
+[3/5] Selecting sources
+      no usable known sources on file — falling back to web discovery
+[4/5] Extracting review data from selected sources
+      known sources still insufficient — running web discovery for the remainder
+      api [discover]: 13723 in / 2118 out (326 reasoning) | 5 web-search action(s)
+        search: "\"H2O Hottubs 6000 Series 32A Twin Pump 6 Person\" review"
+        search: "\"H2O Hottubs 6000 Series\" reviews"
+        ... (3 more)
+      discovered 9 candidate page(s)
+      selected 1/4 source(s) for analysis:
+        + LuxEquipmentOnline - H2O Hottubs 6000 Series 32A Twin Pump Heat Pump 6 Person (EXACT_MATCH 1.00) https://...
+      api [extract]: 14167 in / 933 out (616 reasoning) | 1 web-search action(s)
+        -> LuxEquipmentOnline ...: EXACT_MATCH 0.98, PARTIAL, rating 4.8/5, 37 reviews
+[5/5] Synthesising & validating
+      sentiment: MOSTLY_POSITIVE
+      pros: Powerful jets and relaxing massage | Spacious for up to six | Good value | ...
+      cons: (none)
+      valid: 2/2 sources, 0 failure(s), 1 warning(s) — average rating 4.8/5 (37 reviews)
 ```
+
+In **Reading view**, that becomes a card headed by the product name and, right
+beside it at the same size, **4.8 ★★★★★ (37 reviews)** — the weighted average
+computed from those sources — followed by the sentiment badge, summary,
+pros/cons, and each source with its own rating and link.
 
 ### The registry in action (real, measured — same product, back to back)
 
 ```
 Run 1 (nothing on file):
-  [2/5] Checking review-source registry
-        product key: bromic-heating-eclipse-smart-heat-electric-portable__bh0820011
-        0 known trusted source(s), 0 known-bad source(s) on file
-  ...full discover + extract...
-        registry summary: 0 reused, 0 refreshed, 2 newly discovered & recorded
+      0 known trusted source(s), 0 known-bad source(s) on file
+      ...full discover + extract...
+      registry summary: 0 reused from cache, 0 refreshed, 0 known-bad skipped, 2 newly discovered & recorded
   USAGE & COST: 4 API requests, 7 web searches → $0.0857
 
 Run 2 (same product, run immediately after):
-  [2/5] Checking review-source registry
-        2 known trusted source(s), 0 known-bad source(s) on file
-        reusing 2 fresh trusted source(s) from cache (no re-check needed)
-  [3/5] cached trusted sources already sufficient (2/2 needed) — skipping web discovery
-  [4/5] skipped — 2 source(s) served entirely from the registry cache
-        registry summary: 2 reused from cache, 0 refreshed, 0 known-bad skipped,
-        0 newly discovered, ~$0.0500 web-search cost saved (discovery skipped),
-        ~$0.0200 equivalent web-search cost utilized from cache
+      2 known trusted source(s), 0 known-bad source(s) on file
+      reusing 2 fresh trusted source(s) from cache (no re-check needed):
+      cached trusted sources already sufficient (2/2 needed) — skipping web discovery
+      skipped — 2 source(s) served entirely from the registry cache
+      valid: 2/2 sources, 0 failure(s), 0 warning(s) — average rating 4.7/5 (22 reviews)
+      registry summary: 2 reused from cache, 0 refreshed, 0 known-bad skipped, 0 newly discovered & recorded,
+        ~$0.0500 web-search cost saved (discovery skipped), ~$0.0200 equivalent web-search cost utilized from cache
   USAGE & COST: 2 API requests, 0 web searches → $0.0015   (98% cheaper than run 1)
 ```

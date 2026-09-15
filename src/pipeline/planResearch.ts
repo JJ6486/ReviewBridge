@@ -26,7 +26,7 @@ export async function planResearch(product: ProductInput): Promise<ResearchPlan>
   );
 
   if (plan.identified) {
-    log.detail(
+    log.ui(
       `identified: ${plan.identified_brand ?? "?"} / ${plan.identified_model ?? "?"} — ${plan.canonical_name ?? "?"}`,
     );
   } else {

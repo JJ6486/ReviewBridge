@@ -1,7 +1,7 @@
 /**
  * Web UI server — for demoing the pipeline without the CLI.
  *
- *   npm run web
+ *   npm run dev
  *
  * Serves the single-page frontend (public/index.html) and a tiny JSON API on
  * top of the exact same `runBatch`/`runResearch` pipeline the CLI uses. No

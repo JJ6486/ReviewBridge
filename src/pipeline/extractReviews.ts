@@ -60,7 +60,7 @@ export async function extractReviews(
         url: want.url,
         reason: "Model returned no extraction result for this page.",
       });
-      log.detail(`  ! ${want.source_name}: no result returned`);
+      log.ui(`  ! ${want.source_name}: no result returned`);
       return;
     }
     usedIdx.add(idx);
@@ -70,7 +70,7 @@ export async function extractReviews(
     row.source_name = want.source_name;
     collected.push(row);
 
-    log.detail(
+    log.ui(
       `  -> ${row.source_name}: ${row.match_status} ${row.match_confidence.toFixed(2)}, ` +
         `${row.extraction_status}` +
         (row.rating != null ? `, rating ${row.rating}/${row.rating_scale ?? "?"}` : "") +

@@ -76,7 +76,7 @@ export async function discoverSources(
     });
   discovery.candidates = candidates;
 
-  log.detail(`discovered ${candidates.length} candidate page(s):`);
+  log.ui(`discovered ${candidates.length} candidate page(s)`);
   for (const c of candidates) {
     log.detail(
       `  - ${c.source_name} [${c.source_type}] ${c.match_status} ${c.match_confidence.toFixed(2)}` +
@@ -101,8 +101,8 @@ export async function discoverSources(
   eligible.sort((a, b) => b.match_confidence - a.match_confidence);
   const selected = eligible.slice(0, limit);
 
-  log.detail(`selected ${selected.length}/${limit} source(s) for analysis:`);
-  for (const s of selected) log.detail(`  + ${s.source_name} (${s.match_status} ${s.match_confidence.toFixed(2)}) ${s.url}`);
+  log.ui(`selected ${selected.length}/${limit} source(s) for analysis:`);
+  for (const s of selected) log.ui(`  + ${s.source_name} (${s.match_status} ${s.match_confidence.toFixed(2)}) ${s.url}`);
 
   const rejected = candidates.filter((c) => !selected.includes(c));
   for (const r of rejected) {

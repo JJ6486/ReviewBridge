@@ -70,12 +70,12 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
   log.step(2, TOTAL_STEPS, "Checking review-source registry");
   log.detail(`product key: ${productKey}`);
 
-  const trustedAll = config.registryEnabled ? registry.getTrusted(productKey) : [];
-  const knownBad = config.registryEnabled ? registry.getKnownBad(productKey) : [];
+  const trustedAll = config.registryEnabled ? registry.getTrusted(identity) : [];
+  const knownBad = config.registryEnabled ? registry.getKnownBad(identity) : [];
   if (!config.registryEnabled) {
-    log.detail("registry disabled (REGISTRY_ENABLED=false) — running full web discovery");
+    log.ui("registry disabled (REGISTRY_ENABLED=false) — running full web discovery");
   } else {
-    log.detail(`${trustedAll.length} known trusted source(s), ${knownBad.length} known-bad source(s) on file`);
+    log.ui(`${trustedAll.length} known trusted source(s), ${knownBad.length} known-bad source(s) on file`);
   }
 
   const sourceTypeByUrl = new Map<string, SourceType>();
@@ -87,9 +87,9 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
 
   const cachedSlice = freshTrusted.slice(0, config.maxSources);
   const cachedSources: CollectedSource[] = cachedSlice.map(collectedSourceFromEntry);
-  for (const e of cachedSlice) registry.markReused(e.url, productKey);
+  for (const e of cachedSlice) registry.markReused(e.url, identity);
   if (cachedSlice.length) {
-    log.detail(`reusing ${cachedSlice.length} fresh trusted source(s) from cache (no re-check needed):`);
+    log.ui(`reusing ${cachedSlice.length} fresh trusted source(s) from cache (no re-check needed):`);
     for (const e of cachedSlice) {
       log.detail(
         `  ~ ${e.source_name} (checked ${e.last_checked.slice(0, 10)}, ${e.times_reused + 1}x reused) ${e.url}`,
@@ -114,25 +114,25 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
   log.step(3, TOTAL_STEPS, "Selecting sources");
   if (usableSoFar().length >= config.registryMinSources) {
     webDiscoverySkipped = true;
-    log.detail(
+    log.ui(
       `cached trusted sources already sufficient (${usableSoFar().length}/${config.registryMinSources} needed) — skipping web discovery`,
     );
   } else {
     const refreshBudget = Math.max(0, config.maxSources - collected.length);
     toRefresh = staleTrusted.slice(0, refreshBudget);
     if (toRefresh.length) {
-      log.detail(
+      log.ui(
         `will re-verify ${toRefresh.length} known trusted source(s) past the ${config.registryTtlHours}h freshness window before falling back to web discovery`,
       );
     } else {
-      log.detail("no usable known sources on file — falling back to web discovery");
+      log.ui("no usable known sources on file — falling back to web discovery");
     }
   }
 
   // ---- [4/5] extract: refresh known sources, then discover+extract if still short ----
   log.step(4, TOTAL_STEPS, "Extracting review data from selected sources");
   if (webDiscoverySkipped) {
-    log.detail(`skipped — ${cachedSources.length} source(s) served entirely from the registry cache`);
+    log.ui(`skipped — ${cachedSources.length} source(s) served entirely from the registry cache`);
   } else {
     if (toRefresh.length) {
       const refreshCandidates = toRefresh.map(candidateFromEntry);
@@ -147,12 +147,12 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
 
     if (usableSoFar().length >= config.registryMinSources) {
       webDiscoverySkipped = true;
-      log.detail(`known sources sufficient after refresh (${usableSoFar().length} usable) — skipping web discovery`);
+      log.ui(`known sources sufficient after refresh (${usableSoFar().length} usable) — skipping web discovery`);
     } else {
       const excludeUrls = new Set(knownBad.map((e) => dedupeKey(e.url) ?? e.url));
       const remaining = Math.max(0, config.maxSources - collected.length);
       if (remaining > 0) {
-        log.detail("known sources still insufficient — running web discovery for the remainder");
+        log.ui("known sources still insufficient — running web discovery for the remainder");
         const discOutcome = await discoverSources(product, plan, { excludeUrls, limit: remaining });
         discovery = discOutcome.discovery;
         queriesRun = discOutcome.queriesRun;
@@ -176,7 +176,7 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
     included_in_analysis: isUsableMatch(s) && s.extraction_status !== "FAILED",
   }));
   const validSources = finalSources.filter((s) => s.included_in_analysis);
-  log.detail(
+  log.ui(
     `${validSources.length} of ${finalSources.length} analysed source(s) are a usable exact/likely match`,
   );
 
@@ -218,7 +218,7 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
 
   const costSaved = webDiscoverySkipped ? plan.search_queries.length * SEARCH_UNIT_COST : 0;
   const costUtilized = cachedSlice.length * SEARCH_UNIT_COST;
-  log.detail(
+  log.ui(
     `registry summary: ${cachedSlice.length} reused from cache, ${refreshedCollected.length} refreshed, ` +
       `${skippedKnownBad} known-bad skipped, ${newlyDiscoveredCollected.length} newly discovered & recorded` +
       (costSaved > 0 ? `, ~$${costSaved.toFixed(4)} web-search cost saved (discovery skipped)` : "") +
@@ -251,6 +251,16 @@ export async function runResearch(product: ProductInput): Promise<FinalReport> {
       combined_rating: null,
       combined_rating_note:
         "This PoC does not compute a combined rating; per-source ratings are the reliable signal.",
+      // Placeholder — validateOutput() recomputes this for real from the
+      // guardrailed source list, same as total_valid_sources above.
+      average_rating: {
+        value: null,
+        scale: 5,
+        review_count: 0,
+        sources_with_rating: 0,
+        method: "INSUFFICIENT_DATA",
+        note: "",
+      },
     },
     pros: hasData ? analysis.pros : [],
     cons: hasData ? analysis.cons : [],

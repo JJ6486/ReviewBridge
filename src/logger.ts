@@ -3,6 +3,14 @@
  *
  * Never prints environment variables or API keys. Any `sk-...` looking token
  * that slips into a log call is redacted defensively.
+ *
+ * Console output (stdout/stderr — visible in a local terminal or your hosting
+ * platform's function/server logs) always gets EVERYTHING, at full detail.
+ * The web UI's live log panel is fed by `onLogLine` subscribers and only gets
+ * a curated subset — `step`/`info`/`warn`/`error`/`ui` — so a demo doesn't
+ * drown in the full per-candidate/per-rejection diagnostic trail. Use
+ * `log.detail()` for that verbose trail (console only) and `log.ui()` for the
+ * handful of lines per phase that are worth a viewer watching live.
  */
 import { config } from "./config.js";
 
@@ -18,35 +26,38 @@ function redact(value: unknown): unknown {
   return value;
 }
 
-/** Optional subscribers (e.g. the web server) that want a copy of every printed line. */
+/** Optional subscribers (e.g. the web server) that want a copy of curated log lines. */
 type LineListener = (line: string) => void;
 const listeners = new Set<LineListener>();
 
-/** Subscribe to every log line as plain text. Returns an unsubscribe function. */
+/** Subscribe to curated log lines as plain text. Returns an unsubscribe function. */
 export function onLogLine(fn: LineListener): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
 
-function emit(level: Level, msg: string, extra?: unknown): void {
+function emit(level: Level, msg: string, broadcast: boolean, extra?: unknown): void {
   if (LEVELS[level] < threshold) return;
   const time = new Date().toISOString();
   const line = `${time} ${level.toUpperCase().padEnd(5)} ${String(redact(msg))}`;
   const stream = level === "error" || level === "warn" ? console.error : console.log;
   if (extra !== undefined) stream(line, redact(extra));
   else stream(line);
-  if (listeners.size) for (const fn of listeners) fn(line);
+  if (broadcast && listeners.size) for (const fn of listeners) fn(line);
 }
 
 export const log = {
-  debug: (msg: string, extra?: unknown) => emit("debug", msg, extra),
-  info: (msg: string, extra?: unknown) => emit("info", msg, extra),
-  warn: (msg: string, extra?: unknown) => emit("warn", msg, extra),
-  error: (msg: string, extra?: unknown) => emit("error", msg, extra),
+  debug: (msg: string, extra?: unknown) => emit("debug", msg, false, extra),
+  info: (msg: string, extra?: unknown) => emit("info", msg, true, extra),
+  warn: (msg: string, extra?: unknown) => emit("warn", msg, true, extra),
+  error: (msg: string, extra?: unknown) => emit("error", msg, true, extra),
 
-  /** `[2/5] ...` style progress header. */
-  step: (n: number, total: number, label: string) => emit("info", `[${n}/${total}] ${label}`),
+  /** `[2/5] ...` style progress header. Always shown in the UI log panel. */
+  step: (n: number, total: number, label: string) => emit("info", `[${n}/${total}] ${label}`, true),
 
-  /** Indented sub-line under a step. */
-  detail: (msg: string) => emit("info", `      ${msg}`),
+  /** Verbose diagnostic sub-line (candidate dumps, rejections, etc). Console only. */
+  detail: (msg: string) => emit("info", `      ${msg}`, false),
+
+  /** Curated milestone sub-line — worth a demo viewer seeing live. Console + UI panel. */
+  ui: (msg: string) => emit("info", `      ${msg}`, true),
 };

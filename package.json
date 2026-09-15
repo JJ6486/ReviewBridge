@@ -5,12 +5,10 @@
   "type": "module",
   "description": "PoC: can OpenAI's native web search reliably find and aggregate product reviews from 3-5 selected sources at a reasonable API cost?",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
-    "web": "tsx src/server.ts",
-    "dev:web": "tsx watch src/server.ts",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
